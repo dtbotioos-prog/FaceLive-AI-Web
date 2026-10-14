@@ -1,5 +1,5 @@
-import {FaceLandmarker,FilesetResolver} from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm';
-import {Delaunay} from 'https://cdn.jsdelivr.net/npm/d3-delaunay@6/+esm';
+// Libraries load only after the camera is started, so a CDN failure cannot disable the buttons.
+let FaceLandmarker, FilesetResolver, Delaunay;
 
 const $=id=>document.getElementById(id);
 const video=$('camera'), canvas=$('output'),ctx=canvas.getContext('2d',{alpha:false});
@@ -9,7 +9,7 @@ let stream=null,landmarker=null,source=null,sourcePoints=null,triangles=null,run
 const OVAL=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
 const setStatus=s=>$('status').textContent=s;
 const photoBitmap=async file=>{if('createImageBitmap' in window)return await createImageBitmap(file);return await new Promise((resolve,reject)=>{const img=new Image();const url=URL.createObjectURL(file);img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};img.onerror=reject;img.src=url;});};
-async function init(){if(landmarker)return;setStatus('Загрузка распознавания лица (нужен интернет)…');const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');const options={baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate:'CPU'},runningMode:'IMAGE',numFaces:1};landmarker=await FaceLandmarker.createFromOptions(vision,options);setStatus('Модель готова');}
+async function init(){if(landmarker)return;setStatus('Загрузка распознавания лица (нужен интернет)…');if(!FaceLandmarker){const mp=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');FaceLandmarker=mp.FaceLandmarker;FilesetResolver=mp.FilesetResolver;}if(!Delaunay){({Delaunay}=await import('https://cdn.jsdelivr.net/npm/d3-delaunay@6/+esm'));}const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');const options={baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate:'CPU'},runningMode:'IMAGE',numFaces:1};landmarker=await FaceLandmarker.createFromOptions(vision,options);setStatus('Модель готова');}
 function polygonPath(c,pts,w,h){c.beginPath();OVAL.forEach((i,k)=>{const p=pts[i];if(!p)return;const x=p.x*w,y=p.y*h;k===0?c.moveTo(x,y):c.lineTo(x,y)});c.closePath();}
 function inside(x,y,points){let odd=false;for(let i=0,j=OVAL.length-1;i<OVAL.length;j=i++){const a=points[OVAL[i]],b=points[OVAL[j]];if(((a.y>y)!==(b.y>y))&&(x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x))odd=!odd;}return odd;}
 function createTriangles(points){const d=Delaunay.from(points.slice(0,468),p=>p.x,p=>p.y);const out=[];for(let i=0;i<d.triangles.length;i+=3){const ids=[d.triangles[i],d.triangles[i+1],d.triangles[i+2]];const x=(points[ids[0]].x+points[ids[1]].x+points[ids[2]].x)/3,y=(points[ids[0]].y+points[ids[1]].y+points[ids[2]].y)/3;if(inside(x,y,points))out.push(ids);}return out;}
@@ -21,10 +21,25 @@ mctx.clearRect(0,0,w,h);mctx.save();mctx.filter=`blur(${Math.max(4,Math.round(w*
 function drawMesh(pts,w,h){ctx.save();ctx.fillStyle='#40f5b4';for(let i=0;i<468;i+=3){const p=pts[i];ctx.beginPath();ctx.arc(p.x*w,p.y*h,Math.max(1,w/350),0,Math.PI*2);ctx.fill()}ctx.restore();}
 function resize(w,h){if(canvas.width!==w||canvas.height!==h){for(const c of [canvas,layer,mask]){c.width=w;c.height=h;}}}
 function render(){if(!running)return;frameId=requestAnimationFrame(render);if(video.readyState<2)return;const w=video.videoWidth,h=video.videoHeight;if(!w||!h)return;resize(w,h);ctx.save();ctx.translate(w,0);ctx.scale(-1,1);ctx.drawImage(video,0,0,w,h);ctx.restore();
-if(video.currentTime!==lastVideoTime){lastVideoTime=video.currentTime;try{lastResult=landmarker.detectForVideo(video,performance.now())}catch(e){setStatus('Ошибка обработки: '+e.message);stop();return;}}
+if(!landmarker)return;
+if(video.currentTime!==lastVideoTime){lastVideoTime=video.currentTime;try{lastResult=landmarker.detectForVideo(video,performance.now())}catch(e){setStatus('Ошибка распознавания: '+e.message);landmarker=null;return;}}
 const detected=lastResult?.faceLandmarks?.[0];if(detected){const flipped=detected.map(p=>({...p,x:1-p.x}));if($('swap').checked&&sourcePoints&&triangles)composite(flipped,w,h);if($('mesh').checked)drawMesh(flipped,w,h);setStatus(sourcePoints?($('swap').checked?'Лицо отслеживается — замена включена':'Лицо отслеживается — замена выключена'):'Лицо отслеживается. Загрузите фотографию для замены.');}else setStatus('Повернитесь лицом к камере');
 frames++;if(performance.now()-lastFpsTime>1000){$('fps').textContent=frames+' FPS';frames=0;lastFpsTime=performance.now();}}
 async function loadPhoto(file){if(!file)return;try{await init();setStatus('Поиск лица на фотографии…');const img=await photoBitmap(file);if(running)await landmarker.setOptions({runningMode:'IMAGE'});const result=landmarker.detect(img);if(running)await landmarker.setOptions({runningMode:'VIDEO'});if(!result.faceLandmarks?.length){setStatus('На фотографии лицо не найдено. Выберите чёткий портрет анфас.');return;}source=img;sourcePoints=result.faceLandmarks[0];triangles=createTriangles(sourcePoints);$('photoInfo').textContent=`${file.name} — лицо найдено, ${triangles.length} треугольников`;setStatus('Фото готово. Включите камеру.');}catch(e){setStatus('Ошибка фотографии: '+e.message);}}
-async function start(){if(running)return;try{$('start').disabled=true;await init();setStatus('Запрос доступа к камере…');stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:720},height:{ideal:960}}});video.srcObject=stream;await video.play();await landmarker.setOptions({runningMode:'VIDEO'});running=true;$('placeholder').hidden=true;$('stop').disabled=false;$('snapshot').disabled=false;lastVideoTime=-1;lastResult=null;lastFpsTime=performance.now();frameId=requestAnimationFrame(render);}catch(e){setStatus('Не удалось запустить камеру: '+e.message);$('start').disabled=false;}}
+async function start(){
+ if(running)return;
+ $('start').disabled=true;
+ try{
+  setStatus('Запрос доступа к камере…');
+  if(!navigator.mediaDevices?.getUserMedia)throw new Error('Браузер не поддерживает доступ к камере. Откройте сайт по HTTPS в Safari.');
+  stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:720},height:{ideal:960}}});
+  video.srcObject=stream;await video.play();
+  running=true;$('placeholder').hidden=true;$('stop').disabled=false;$('snapshot').disabled=false;
+  lastVideoTime=-1;lastResult=null;lastFpsTime=performance.now();frameId=requestAnimationFrame(render);
+  setStatus('Камера включена. Загружаем распознавание лица…');
+  try{await init();if(!running)return;await landmarker.setOptions({runningMode:'VIDEO'});setStatus('Камера и распознавание лица готовы');}
+  catch(e){setStatus('Камера работает, но распознавание не загрузилось: '+(e?.message||e));}
+ }catch(e){setStatus('Не удалось запустить камеру: '+(e?.message||e));$('start').disabled=false;stream?.getTracks().forEach(t=>t.stop());stream=null;}
+}
 async function stop(){running=false;cancelAnimationFrame(frameId);stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;$('start').disabled=false;$('stop').disabled=true;$('snapshot').disabled=true;$('fps').textContent='';if(landmarker)try{await landmarker.setOptions({runningMode:'IMAGE'})}catch{}setStatus('Камера остановлена');}
 $('photo').addEventListener('change',e=>loadPhoto(e.target.files[0]));$('start').addEventListener('click',start);$('stop').addEventListener('click',stop);$('opacity').addEventListener('input',e=>$('opacityValue').textContent=e.target.value+'%');$('snapshot').addEventListener('click',()=>{const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='facelive-'+Date.now()+'.png';a.click()});document.addEventListener('visibilitychange',()=>{if(document.hidden&&running)stop()});
