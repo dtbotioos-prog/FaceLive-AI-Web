@@ -1,24 +1,19 @@
-# FaceLive AI Web — iPhone starter
+# FaceLive AI — рабочий веб-проект
 
-This is a **working camera prototype**, not a working face-swap engine. It can open the front camera, select a local photo, and attempt experimental face detection only if the browser exposes `FaceDetector`. Safari support is not guaranteed. No image processing model is bundled.
+Мобильное веб-приложение: фронтальная камера, выбор фотографии, обнаружение лица и геометрическое перенесение лица с фотографии на видеокадры. Работает на GitHub Pages по HTTPS, требует интернет для загрузки библиотек и модели.
 
-## Publish using GitHub Pages
-1. Create a **public** GitHub repository named `FaceLive-AI-Web`.
-2. Upload `index.html`, `app.js`, `manifest.webmanifest`, and `.nojekyll` to the repository root (include this README if desired).
-3. Go to **Settings → Pages → Build and deployment → Source: Deploy from a branch**.
-4. Choose `main` and `/(root)`, then **Save**.
-5. Open `https://YOUR-USERNAME.github.io/FaceLive-AI-Web/` in Safari on the iPhone.
-6. Grant camera access, then use Safari's Share → Add to Home Screen.
+## Установка
 
-## What works
-- Camera preview with `getUserMedia`
-- Start/stop controls
-- Local photo picker
-- Experimental FaceDetector API detection if supported
+1. Загрузите `index.html`, `app.js`, `style.css`, `manifest.webmanifest` в корень GitHub-репозитория.
+2. Settings → Pages → Deploy from a branch → main → /(root).
+3. Откройте GitHub Pages URL в Safari на iPhone, разрешите доступ к камере.
+4. Выберите чёткую фотографию лица анфас и нажмите «Запустить камеру».
+5. Если обработка тормозит, выключите «Показывать точки лица», уменьшите разрешение камеры в `app.js`.
 
-## What is not implemented
-- Realistic photo-based face swapping, Core ML, MediaPipe, recording, RTMP, TikTok or Instagram camera replacement.
+## Ограничения
 
-GitHub Pages is static hosting. Full neural face swapping in Safari requires a separately licensed browser-compatible model, preprocessing, compositing, and performance validation on device. A website cannot replace the TikTok or Instagram app camera.
+Это **не нейросетевой deepfake**. Приложение делает 2D геометрическую деформацию фотографии по точкам лица. При больших поворотах головы, изменении освещения и открывании рта возможны артефакты. Скорость на iPhone не гарантируется. Safari не умеет подменять камеру сторонних приложений TikTok/Instagram. Видео обрабатывается на устройстве; библиотеки и модель загружаются из внешних CDN. Не используйте фотографии людей без согласия.
 
-Only use facial images with permission, and disclose synthetic appearance in live broadcasts.
+## Технологии
+
+MediaPipe Tasks Vision Face Landmarker, d3-delaunay, Canvas 2D, JavaScript ES modules. Статический хостинг GitHub Pages, сервер не нужен.
