@@ -26,21 +26,43 @@ async function getSourceLandmarks(){
   return sourceLandmarks;
 }
 function eyeCenter(l,ids){return ids.reduce((a,i)=>({x:a.x+l[i].x/ids.length,y:a.y+l[i].y/ids.length}),{x:0,y:0});}
+// A soft, face-shaped alpha mask replaces the old hard oval crop.
+// This remains a 2D overlay; it does not synthesize facial expressions.
+const faceLayer=document.createElement('canvas');
+const maskLayer=document.createElement('canvas');
 function transformFace(target,src){
   const sw=source.naturalWidth,sh=source.naturalHeight,w=canvas.width,h=canvas.height;
+  if(!sw||!sh||!w||!h)return;
   const sl=eyeCenter(src,[33,133]),sr=eyeCenter(src,[362,263]);
   const tl=eyeCenter(target,[33,133]),tr=eyeCenter(target,[362,263]);
-  const sx=(sl.x+sr.x)/2*sw,sy=(sl.y+sr.y)/2*sh,tx=(tl.x+tr.x)/2*w,ty=(tl.y+tr.y)/2*h;
-  const srcD=Math.hypot((sr.x-sl.x)*sw,(sr.y-sl.y)*sh),dstD=Math.hypot((tr.x-tl.x)*w,(tr.y-tl.y)*h);
-  if(srcD<1)return;
+  const sx=(sl.x+sr.x)/2*sw,sy=(sl.y+sr.y)/2*sh;
+  const tx=(tl.x+tr.x)/2*w,ty=(tl.y+tr.y)/2*h;
+  const srcD=Math.hypot((sr.x-sl.x)*sw,(sr.y-sl.y)*sh);
+  const dstD=Math.hypot((tr.x-tl.x)*w,(tr.y-tl.y)*h);
+  if(srcD<1||dstD<1)return;
   const scale=dstD/srcD;
-  const a=Math.atan2((tr.y-tl.y)*h,(tr.x-tl.x)*w)-Math.atan2((sr.y-sl.y)*sh,(sr.x-sl.x)*sw);
+  const angle=Math.atan2((tr.y-tl.y)*h,(tr.x-tl.x)*w)-Math.atan2((sr.y-sl.y)*sh,(sr.x-sl.x)*sw);
   const xs=src.map(p=>p.x*sw),ys=src.map(p=>p.y*sh);
   const minX=Math.min(...xs),maxX=Math.max(...xs),minY=Math.min(...ys),maxY=Math.max(...ys);
-  const cx=(minX+maxX)/2,cy=(minY+maxY)/2,rx=(maxX-minX)*0.46,ry=(maxY-minY)*0.49;
-  ctx.save();ctx.translate(tx,ty);ctx.rotate(a);ctx.scale(scale,scale);ctx.translate(-sx,-sy);
-  ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.clip();ctx.globalAlpha=Number($('opacity').value)/100;
-  ctx.drawImage(source,0,0,sw,sh);ctx.restore();
+  const cx=(minX+maxX)/2,cy=(minY+maxY)/2;
+  // Smaller than the previous ellipse, so the original hairline, ears and jaw stay visible.
+  const rx=(maxX-minX)*0.405,ry=(maxY-minY)*0.435;
+  if(faceLayer.width!==w||faceLayer.height!==h){faceLayer.width=maskLayer.width=w;faceLayer.height=maskLayer.height=h;}
+  const fc=faceLayer.getContext('2d'),mc=maskLayer.getContext('2d');
+  fc.clearRect(0,0,w,h);mc.clearRect(0,0,w,h);
+  const position=c=>{c.translate(tx,ty);c.rotate(angle);c.scale(scale,scale);c.translate(-sx,-sy);};
+  fc.save();position(fc);fc.drawImage(source,0,0,sw,sh);fc.restore();
+  // Soft elliptical falloff; feather is wide enough to avoid a visible sticker edge.
+  mc.save();position(mc);mc.translate(cx,cy);mc.scale(rx,ry);
+  const grad=mc.createRadialGradient(0,0,0,0,0,1);
+  grad.addColorStop(0,'rgba(255,255,255,1)');
+  grad.addColorStop(0.60,'rgba(255,255,255,1)');
+  grad.addColorStop(0.80,'rgba(255,255,255,0.85)');
+  grad.addColorStop(0.94,'rgba(255,255,255,0.28)');
+  grad.addColorStop(1,'rgba(255,255,255,0)');
+  mc.fillStyle=grad;mc.beginPath();mc.arc(0,0,1,0,Math.PI*2);mc.fill();mc.restore();
+  fc.save();fc.globalCompositeOperation='destination-in';fc.drawImage(maskLayer,0,0);fc.restore();
+  ctx.save();ctx.globalAlpha=Number($('opacity').value)/100;ctx.drawImage(faceLayer,0,0);ctx.restore();
 }
 let lastVideoTime=-1,frameCount=0;
 function draw(){
