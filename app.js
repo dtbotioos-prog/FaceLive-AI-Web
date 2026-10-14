@@ -7,8 +7,8 @@ $('photo').onchange=()=>{const file=$('photo').files?.[0];if(!file)return;source
 async function loadDetector(){
   if(landmarker)return;
   say('Камера работает. Загружаем MediaPipe…');
-  const mod=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');
-  const files=await mod.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');
+  const mod=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+  const files=await mod.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
   landmarker=await mod.FaceLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate:'CPU'},runningMode:'VIDEO',numFaces:1});
   say('Распознавание запущено. Смотрите в камеру.');
 }
@@ -18,8 +18,8 @@ async function getSourceLandmarks(){
   const off=document.createElement('canvas');off.width=source.naturalWidth;off.height=source.naturalHeight;off.getContext('2d').drawImage(source,0,0);
   const old=landmarker;
   // A second IMAGE-mode detector is needed; VIDEO mode cannot detect static images.
-  const mod=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/+esm');
-  const files=await mod.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');
+  const mod=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+  const files=await mod.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
   const imgDetector=await mod.FaceLandmarker.createFromOptions(files,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate:'CPU'},runningMode:'IMAGE',numFaces:1});
   sourceLandmarks=imgDetector.detect(off).faceLandmarks[0]||null;imgDetector.close();lastSource=source.src;
   if(!sourceLandmarks)say('На выбранной фотографии лицо не найдено.');
